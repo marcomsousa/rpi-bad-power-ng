@@ -17,6 +17,7 @@ from rpi_bad_power.throttled import (
     ThrottledStatus,
     read_throttled_status,
 )
+from rpi_bad_power.watcher import AsyncUnderVoltageWatcher, supports_sysfs_poll
 
 __version__ = "0.2.0"
 
@@ -26,6 +27,7 @@ __all__ = [
     "SYSFILE_HWMON_FILE",
     "SYSFILE_LEGACY",
     "UNDERVOLTAGE_STICKY_BIT",
+    "AsyncUnderVoltageWatcher",
     "RpiBadPowerError",
     "ThrottledFlag",
     "ThrottledStatus",
@@ -77,9 +79,20 @@ def get_rpi_volt_hwmon() -> str | None:
 class UnderVoltage(ABC):
     """Abstract base class for reading Raspberry Pi under-voltage status."""
 
+    @property
+    def supports_push(self) -> bool:
+        """Return True if kernel ``sysfs_notify`` push notifications are supported."""
+        return False
+
     @abstractmethod
     def get(self) -> bool:
         """Get current under-voltage status."""
+
+    def async_watch(self, *, emit_initial: bool = True) -> AsyncUnderVoltageWatcher:
+        """Watch for kernel under-voltage events asynchronously."""
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support push notifications"
+        )
 
 
 class UnderVoltageNew(UnderVoltage):
@@ -94,6 +107,22 @@ class UnderVoltageNew(UnderVoltage):
     def alarm_path(self) -> Path:
         """Return the resolved ``in0_lcrit_alarm`` sysfs file path."""
         return self._alarm_path
+
+    @property
+    def supports_push(self) -> bool:
+        """Return True if ``select.poll`` with ``POLLPRI`` is supported."""
+        return supports_sysfs_poll()
+
+    def async_watch(self, *, emit_initial: bool = True) -> AsyncUnderVoltageWatcher:
+        """Return an async watcher for ``in0_lcrit_alarm`` kernel events."""
+        if not self.supports_push:
+            raise NotImplementedError(
+                "sysfs_notify push watching requires select.poll with POLLPRI"
+            )
+        return AsyncUnderVoltageWatcher(
+            self._alarm_path,
+            emit_initial=emit_initial,
+        )
 
     def get(self) -> bool:
         """Get under-voltage status from ``in0_lcrit_alarm``."""
