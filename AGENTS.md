@@ -22,6 +22,7 @@ rpi-bad-power-ng/
 │   ├── watcher.py        # AsyncUnderVoltageWatcher (Linux POLLPRI|POLLERR + self-pipe shutdown)
 │   └── py.typed          # PEP 561 typed package marker
 ├── tests/
+│   ├── test_ha_compat.py      # Home Assistant Core rpi_power drop-in contract tests
 │   ├── test_rpi_bad_power.py  # Discovery, parsing, newline/whitespace, permission & I/O error tests
 │   ├── test_throttled.py      # Bitmask flag decoding and get_throttled_status() tests
 │   └── test_watcher.py        # Async POLLPRI watcher, deduplication, cancellation & fd-leak tests
@@ -40,7 +41,12 @@ rpi-bad-power-ng/
 
 ## 3. Strict Home Assistant Compatibility Contract (DO NOT BREAK)
 
-Home Assistant Core's `rpi_power` integration imports and uses this library across three modules (`__init__.py`, `binary_sensor.py`, `config_flow.py`) and `manifest.json`. Every release **must preserve full backwards compatibility** with the contract below:
+Home Assistant Core's [`rpi_power`](https://www.home-assistant.io/integrations/rpi_power/) integration imports and uses this library across [`__init__.py`](https://github.com/home-assistant/core/blob/dev/homeassistant/components/rpi_power/__init__.py), [`binary_sensor.py`](https://github.com/home-assistant/core/blob/dev/homeassistant/components/rpi_power/binary_sensor.py), [`config_flow.py`](https://github.com/home-assistant/core/blob/dev/homeassistant/components/rpi_power/config_flow.py), and [`manifest.json`](https://github.com/home-assistant/core/blob/dev/homeassistant/components/rpi_power/manifest.json) (with tests in [`tests/components/rpi_power`](https://github.com/home-assistant/core/tree/dev/tests/components/rpi_power)).
+
+> [!IMPORTANT]
+> **Always inspect live upstream Home Assistant Core `rpi_power` before and after library changes** (`gh api repos/home-assistant/core/contents/homeassistant/components/rpi_power`) to verify exact compatibility with imports, typing (`ConfigEntry[UnderVoltage]`), executor-thread behavior, repair flows, and loggers.
+
+Every release **must preserve full backwards compatibility** with the contract below:
 
 ### 3.1 Package & Import Name
 - The PyPI distribution name is **`rpi-bad-power-ng`**, while the importable Python package **must remain `rpi_bad_power`** (drop-in replacement for `rpi-bad-power`).
@@ -96,12 +102,19 @@ from rpi_bad_power import UnderVoltage, new_under_voltage
 - [ ] **Phase 5 — Companion Home Assistant Core (`rpi_power`) Integration Improvements:**
   1. Catch `OSError` / `RpiBadPowerError` in `binary_sensor.py` and toggle `_attr_available = False` cleanly.
   2. Fix misleading startup log (`"Voltage normalized..."` logged on boot when `_attr_is_on` transitions `None -> False` — change `else:` to `elif self._attr_is_on:`).
-  3. Use imported `ISSUE_UNDER_VOLTAGE` constant and fix `"a uninterruptible power supply"` wording in `DESCRIPTION_UNDER_VOLTAGE`.
+  3. Replace the hardcoded `translation_key="under_voltage_detected"` literal in `create_issue(...)` with `ISSUE_UNDER_VOLTAGE` (already used for `issue_id`) and fix `"a uninterruptible power supply"` wording in `DESCRIPTION_UNDER_VOLTAGE`.
   4. Migrate `manifest.json` from `iot_class: "local_polling"` to `"local_push"` using `under_voltage.async_watch()` (falling back to polling when `not under_voltage.supports_push`), add `diagnostics.py`, and target Silver/Gold Integration Quality Scale.
 
 ---
 
 ## 6. Development, Testing & Release Guidelines
+
+### Mandatory Workflow Rules
+1. **Always execute tests BEFORE and AFTER improvements:**
+   - Run the full check/test baseline **before** editing code so pre-existing state is known.
+   - Re-run all linters, strict type checks, tests (with branch coverage), and package builds **after** every change before committing or pushing.
+2. **Always check Home Assistant Core `rpi_power` compatibility:**
+   - Inspect live `homeassistant/components/rpi_power` (`__init__.py`, `binary_sensor.py`, `config_flow.py`, `manifest.json`, and `tests/components/rpi_power`) and ensure [`tests/test_ha_compat.py`](tests/test_ha_compat.py) passes.
 
 ### Local Toolchain Commands (Always use `uv`)
 ```bash
