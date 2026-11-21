@@ -12,6 +12,11 @@ from pathlib import Path
 
 from rpi_bad_power._sysfs import is_readable_file, parse_alarm_value
 from rpi_bad_power.exceptions import RpiBadPowerError
+from rpi_bad_power.throttled import (
+    ThrottledFlag,
+    ThrottledStatus,
+    read_throttled_status,
+)
 
 __version__ = "0.2.0"
 
@@ -22,11 +27,14 @@ __all__ = [
     "SYSFILE_LEGACY",
     "UNDERVOLTAGE_STICKY_BIT",
     "RpiBadPowerError",
+    "ThrottledFlag",
+    "ThrottledStatus",
     "UnderVoltage",
     "UnderVoltageLegacy",
     "UnderVoltageNew",
     "__version__",
     "get_rpi_volt_hwmon",
+    "get_throttled_status",
     "new_under_voltage",
 ]
 
@@ -117,37 +125,32 @@ class UnderVoltageLegacy(UnderVoltage):
         """Return the ``get_throttled`` sysfs file path."""
         return self._path if self._path is not None else Path(SYSFILE_LEGACY)
 
+    def get_throttled_status(self) -> ThrottledStatus:
+        """Read and decode the full ``get_throttled`` firmware bitmask."""
+        return read_throttled_status(self.throttled_path)
+
     def get(self) -> bool:
         """Get under-voltage status from ``get_throttled``."""
-        path = self.throttled_path
-        try:
-            with path.open(encoding="utf-8") as file:
-                throttled = file.read().strip()
-        except OSError as err:
-            raise RpiBadPowerError.from_os_error(
-                "Failed to read legacy throttled status",
-                err,
-                path,
-            ) from err
-        except UnicodeDecodeError as err:
-            raise RpiBadPowerError(
-                f"Failed to decode legacy throttled status from {path}: {err}"
-            ) from err
+        status = self.get_throttled_status()
+        return (status.raw & UNDERVOLTAGE_STICKY_BIT) == UNDERVOLTAGE_STICKY_BIT
 
-        _LOGGER.debug("Get throttled value: %s", throttled)
-        if not throttled:
-            raise RpiBadPowerError(f"Empty throttled value from {path}")
-        try:
-            throttled_value = int(throttled, base=16)
-        except ValueError as err:
-            raise RpiBadPowerError(
-                f"Invalid throttled hex value {throttled!r} from {path}"
-            ) from err
-        if throttled_value < 0:
-            raise RpiBadPowerError(
-                f"Negative throttled hex value {throttled!r} from {path}"
-            )
-        return (throttled_value & UNDERVOLTAGE_STICKY_BIT) == UNDERVOLTAGE_STICKY_BIT
+
+def get_throttled_status(
+    path: str | os.PathLike[str] | None = None,
+) -> ThrottledStatus | None:
+    """Read and decode the Raspberry Pi ``get_throttled`` sysfs bitmask.
+
+    Returns ``None`` if the ``get_throttled`` sysfs entry is not present on the
+    current system or kernel. Raises :class:`RpiBadPowerError` if the file
+    exists but cannot be read or contains invalid hexadecimal data.
+    """
+    target = Path(path) if path is not None else Path(SYSFILE_LEGACY)
+    try:
+        return read_throttled_status(target)
+    except RpiBadPowerError as err:
+        if isinstance(err.__cause__, (FileNotFoundError, NotADirectoryError)):
+            return None
+        raise
 
 
 def new_under_voltage() -> UnderVoltage | None:
