@@ -1,8 +1,10 @@
 # rpi-bad-power-ng
 
+[![PyPI](https://img.shields.io/pypi/v/rpi-bad-power-ng)](https://pypi.org/project/rpi-bad-power-ng/)
+[![Downloads](https://static.pepy.tech/badge/rpi-bad-power-ng)](https://pepy.tech/projects/rpi-bad-power-ng)
 [![CI](https://github.com/marcomsousa/rpi-bad-power-ng/actions/workflows/ci.yml/badge.svg)](https://github.com/marcomsousa/rpi-bad-power-ng/actions/workflows/ci.yml)
-[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Python 3.12+](https://img.shields.io/pypi/pyversions/rpi-bad-power-ng)](https://pypi.org/project/rpi-bad-power-ng/)
+[![License: MIT](https://img.shields.io/github/license/marcomsousa/rpi-bad-power-ng)](LICENSE)
 
 Next-generation, zero-dependency Python library to detect Raspberry Pi bad power supply (under-voltage) and firmware throttling directly from Linux `sysfs`.
 
